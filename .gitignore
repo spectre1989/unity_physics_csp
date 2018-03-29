@@ -4,3 +4,4 @@ unity_physics_csp.sln
 .vs/
 Assembly-CSharp.csproj
 obj/
+Temp/

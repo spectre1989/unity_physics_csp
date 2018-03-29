@@ -32,9 +32,6 @@ public class Logic : MonoBehaviour
 
     private void Start()
     {
-        this.client_player.SetActive(true);
-        this.server_player.SetActive(false);
-
         this.timer = 0.0f;
 
         this.server_inputs = new Queue<InputMessage>();
@@ -43,6 +40,11 @@ public class Logic : MonoBehaviour
     private void Update()
     {
         // client update
+
+        // enable client player, disable server player
+        this.server_player.SetActive(false);
+        this.client_player.SetActive(true);
+
         this.timer += Time.deltaTime;
 
         float t = this.timer;
@@ -57,6 +59,7 @@ public class Logic : MonoBehaviour
             inputs.left = Input.GetKey(KeyCode.A);
             inputs.right = Input.GetKey(KeyCode.D);
             inputs.jump = Input.GetKey(KeyCode.Space);
+            
             this.PrePhysicsStep(this.client_player.GetComponent<Rigidbody>(), inputs);
             Physics.Simulate(dt);
 
@@ -67,24 +70,26 @@ public class Logic : MonoBehaviour
         }
         this.timer = t;
 
-        while(this.server_inputs.Count > 0 && Time.time >= this.server_inputs.Peek().delivery_time)
+        // server update
+
+        // enable server player, disable client player
+        this.client_player.SetActive(false);
+        this.server_player.SetActive(true);
+
+        while (this.server_inputs.Count > 0 && Time.time >= this.server_inputs.Peek().delivery_time)
         {
             InputMessage inputMsg = this.server_inputs.Dequeue();
-
-            this.client_player.SetActive(false);
-            this.server_player.SetActive(true);
 
             this.PrePhysicsStep(this.server_player.GetComponent<Rigidbody>(), inputMsg.inputs);
             Physics.Simulate(dt);
 
             this.server_display_player.transform.position = this.server_player.transform.position;
             this.server_display_player.transform.rotation = this.server_player.transform.rotation;
-
-            this.client_player.SetActive(true);
-            this.server_player.SetActive(false);
         }
 
-
+        // finally, we're viewing the client, so enable the client player, disable server again
+        this.server_player.SetActive(false);
+        this.client_player.SetActive(true);
     }
 
     private void PrePhysicsStep(Rigidbody rigidbody, Inputs inputs)
