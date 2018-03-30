@@ -15,7 +15,24 @@ public class Logic : MonoBehaviour
     private struct InputMessage
     {
         public float delivery_time;
+        public uint tick_number;
         public Inputs inputs;
+    }
+
+    private struct ClientState
+    {
+        public Vector3 position;
+        public Quaternion rotation;
+    }
+
+    private struct StateMessage
+    {
+        public float delivery_time;
+        public uint tick_number;
+        public Vector3 position;
+        public Quaternion rotation;
+        public Vector3 velocity;
+        public Vector3 angular_velocity;
     }
 
     public Transform local_player_camera_transform;
@@ -25,16 +42,26 @@ public class Logic : MonoBehaviour
     public GameObject server_player;
     public GameObject server_display_player;
     public GameObject proxy_player;
+    public const float c_latency = 0.1f; // todo(jbr) make a variable to tweak
     
-    private float timer;
+    private float client_timer;
+    private uint client_tick_number;
+    private const int c_client_buffer_size = 1024;
+    private ClientState[] client_state_buffer; // client stores predicted moves here
+    private Inputs[] client_input_buffer; // client stores predicted inputs here
+    private Queue<StateMessage> client_state_msgs;
 
-    private Queue<InputMessage> server_inputs;
+    private Queue<InputMessage> server_input_msgs;
 
     private void Start()
     {
-        this.timer = 0.0f;
+        this.client_timer = 0.0f;
+        this.client_tick_number = 0;
+        this.client_state_buffer = new ClientState[c_client_buffer_size];
+        this.client_input_buffer = new Inputs[c_client_buffer_size];
+        this.client_state_msgs = new Queue<StateMessage>();
 
-        this.server_inputs = new Queue<InputMessage>();
+        this.server_input_msgs = new Queue<InputMessage>();
     }
 
     private void Update()
@@ -45,13 +72,14 @@ public class Logic : MonoBehaviour
         this.server_player.SetActive(false);
         this.client_player.SetActive(true);
 
-        this.timer += Time.deltaTime;
-
-        float t = this.timer;
         float dt = Time.fixedDeltaTime;
-        while (t >= dt)
+        float client_timer = this.client_timer;
+        uint client_tick_number = this.client_tick_number;
+
+        client_timer += Time.deltaTime;
+        while (client_timer >= dt)
         {
-            t -= dt;
+            client_timer -= dt;
 
             Inputs inputs;
             inputs.up = Input.GetKey(KeyCode.W);
@@ -59,16 +87,65 @@ public class Logic : MonoBehaviour
             inputs.left = Input.GetKey(KeyCode.A);
             inputs.right = Input.GetKey(KeyCode.D);
             inputs.jump = Input.GetKey(KeyCode.Space);
-            
-            this.PrePhysicsStep(this.client_player.GetComponent<Rigidbody>(), inputs);
+
+            Rigidbody rigidbody = this.client_player.GetComponent<Rigidbody>();
+
+            uint buffer_slot = client_tick_number % c_client_buffer_size;
+            this.client_state_buffer[buffer_slot].position = rigidbody.position;
+            this.client_state_buffer[buffer_slot].rotation = rigidbody.rotation;
+            this.client_input_buffer[buffer_slot] = inputs;
+
+            this.PrePhysicsStep(rigidbody, inputs);
             Physics.Simulate(dt);
 
-            InputMessage inputMsg;
-            inputMsg.delivery_time = Time.time + 0.1f;
-            inputMsg.inputs = inputs;
-            this.server_inputs.Enqueue(inputMsg);
+            InputMessage input_msg;
+            input_msg.delivery_time = Time.time + c_latency;
+            input_msg.tick_number = client_tick_number;
+            input_msg.inputs = inputs;
+            this.server_input_msgs.Enqueue(input_msg);
+
+            ++client_tick_number;
         }
-        this.timer = t;
+
+        if (this.client_state_msgs.Count > 0 && Time.time >= this.client_state_msgs.Peek().delivery_time)
+        {
+            StateMessage state_msg = this.client_state_msgs.Dequeue();
+            while (this.client_state_msgs.Count > 0 && Time.time >= this.client_state_msgs.Peek().delivery_time) // todo(jbr) compression
+            {
+                state_msg = this.client_state_msgs.Dequeue();
+            }
+
+            this.proxy_player.transform.position = state_msg.position;
+            this.proxy_player.transform.rotation = state_msg.rotation;
+
+            uint buffer_slot = state_msg.tick_number % c_client_buffer_size;
+            if ((state_msg.position - this.client_state_buffer[buffer_slot].position).sqrMagnitude > 0.01f ||
+                Quaternion.Dot(state_msg.rotation, this.client_state_buffer[buffer_slot].rotation) < 0.99f) // todo(jbr) put these in consts
+            {
+                Debug.Log("Correction! " + buffer_slot.ToString());
+                Rigidbody rigidbody = this.client_player.GetComponent<Rigidbody>();
+                rigidbody.position = state_msg.position;
+                rigidbody.rotation = state_msg.rotation;
+                rigidbody.velocity = state_msg.velocity;
+                rigidbody.angularVelocity = state_msg.angular_velocity;
+
+                uint rewind_tick_number = state_msg.tick_number;
+                while (rewind_tick_number < client_tick_number)
+                {
+                    buffer_slot = rewind_tick_number % c_client_buffer_size; // todo(jbr) compression
+                    this.client_state_buffer[buffer_slot].position = rigidbody.position;
+                    this.client_state_buffer[buffer_slot].rotation = rigidbody.rotation;
+
+                    this.PrePhysicsStep(rigidbody, this.client_input_buffer[buffer_slot]);
+                    Physics.Simulate(dt);
+
+                    ++rewind_tick_number;
+                }
+            }
+        }
+
+        this.client_timer = client_timer;
+        this.client_tick_number = client_tick_number;
 
         // server update
 
@@ -76,15 +153,25 @@ public class Logic : MonoBehaviour
         this.client_player.SetActive(false);
         this.server_player.SetActive(true);
 
-        while (this.server_inputs.Count > 0 && Time.time >= this.server_inputs.Peek().delivery_time)
+        while (this.server_input_msgs.Count > 0 && Time.time >= this.server_input_msgs.Peek().delivery_time)
         {
-            InputMessage inputMsg = this.server_inputs.Dequeue();
+            InputMessage inputMsg = this.server_input_msgs.Dequeue();
 
-            this.PrePhysicsStep(this.server_player.GetComponent<Rigidbody>(), inputMsg.inputs);
+            Rigidbody rigidbody = this.server_player.GetComponent<Rigidbody>();
+            this.PrePhysicsStep(rigidbody, inputMsg.inputs);
             Physics.Simulate(dt);
 
-            this.server_display_player.transform.position = this.server_player.transform.position;
-            this.server_display_player.transform.rotation = this.server_player.transform.rotation;
+            StateMessage state_msg;
+            state_msg.delivery_time = Time.time + c_latency;
+            state_msg.tick_number = inputMsg.tick_number + 1;
+            state_msg.position = rigidbody.position;
+            state_msg.rotation = rigidbody.rotation;
+            state_msg.velocity = rigidbody.velocity;
+            state_msg.angular_velocity = rigidbody.angularVelocity;
+            this.client_state_msgs.Enqueue(state_msg);
+
+            this.server_display_player.transform.position = rigidbody.position;
+            this.server_display_player.transform.rotation = rigidbody.rotation;
         }
 
         // finally, we're viewing the client, so enable the client player, disable server again

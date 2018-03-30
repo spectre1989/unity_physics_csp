@@ -446,7 +446,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!23 &892738514
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -1006,7 +1006,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   local_player_camera_transform: {fileID: 569644453}
   player_movement_impulse: 0.5
-  player_jump_y_threshold: -2
+  player_jump_y_threshold: -3
   client_player: {fileID: 767102048}
   server_player: {fileID: 2084854767}
   server_display_player: {fileID: 579593188}
