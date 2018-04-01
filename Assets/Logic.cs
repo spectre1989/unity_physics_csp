@@ -179,11 +179,19 @@ public class Logic : MonoBehaviour
         {
             InputMessage input_msg = this.server_input_msgs.Dequeue();
 
-            uint max_tick = input_msg.start_tick_number + (uint)input_msg.inputs.Count - 1;  
+            // message contains an array of inputs, calculate what tick the final one is
+            uint max_tick = input_msg.start_tick_number + (uint)input_msg.inputs.Count - 1;
+
+            // if that tick is greater than or equal to the current tick we're on, then it
+            // has inputs which are new
             if (max_tick >= server_tick_number)
             {
-                // todo(jbr) this kind of stuff is a bit hairy, make it nicer
-                for (int i = (int)(server_tick_number - input_msg.start_tick_number); i < input_msg.inputs.Count; ++i)
+                // there may be some inputs in the array that we've already had,
+                // so figure out where to start
+                int start_i = (int)(server_tick_number - input_msg.start_tick_number);
+
+                // run through all relevant inputs, and step player forward
+                for (int i = start_i; i < input_msg.inputs.Count; ++i)
                 {
                     this.PrePhysicsStep(server_rigidbody, input_msg.inputs[i]);
                     Physics.Simulate(dt);
