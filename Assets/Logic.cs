@@ -48,7 +48,7 @@ public class Logic : MonoBehaviour
 
     private const float c_max_prediction_error_pos = 0.1f;
     private const float c_max_prediction_error_pos_sq = c_max_prediction_error_pos * c_max_prediction_error_pos;
-    private const float c_max_prediction_error_rot_dot = 0;//0.996f; // ~5 degrees
+    private const float c_max_prediction_error_rot_dot = 0;//0.996f; // ~5 degrees todo(jbr)
 
     private float client_timer;
     private uint client_tick_number;
@@ -199,6 +199,22 @@ public class Logic : MonoBehaviour
                     Physics.Simulate(dt);
 
                     ++server_tick_accumulator;
+                    if (server_tick_accumulator >= this.server_snapshot_rate)
+                    {
+                        server_tick_accumulator = 0;
+
+                        if (Random.value < Logic.c_packet_loss)
+                        {
+                            StateMessage state_msg;
+                            state_msg.delivery_time = Time.time + Logic.c_latency;
+                            state_msg.tick_number = server_tick_number;
+                            state_msg.position = server_rigidbody.position;
+                            state_msg.rotation = server_rigidbody.rotation;
+                            state_msg.velocity = server_rigidbody.velocity;
+                            state_msg.angular_velocity = server_rigidbody.angularVelocity;
+                            this.client_state_msgs.Enqueue(state_msg);
+                        }
+                    }
                 }
                 
                 this.server_display_player.transform.position = server_rigidbody.position;
@@ -207,22 +223,7 @@ public class Logic : MonoBehaviour
                 server_tick_number = max_tick + 1;
             }
         }
-        if (server_tick_accumulator >= this.server_snapshot_rate)
-        {
-            server_tick_accumulator = 0;
-
-            if (Random.value < Logic.c_packet_loss)
-            {
-                StateMessage state_msg;
-                state_msg.delivery_time = Time.time + Logic.c_latency;
-                state_msg.tick_number = server_tick_number;
-                state_msg.position = server_rigidbody.position;
-                state_msg.rotation = server_rigidbody.rotation;
-                state_msg.velocity = server_rigidbody.velocity;
-                state_msg.angular_velocity = server_rigidbody.angularVelocity;
-                this.client_state_msgs.Enqueue(state_msg);
-            }
-        }
+        
         this.server_tick_number = server_tick_number;
         this.server_tick_accumulator = server_tick_accumulator;
 
