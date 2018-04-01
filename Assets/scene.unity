@@ -342,7 +342,7 @@ GameObject:
   - component: {fileID: 767102051}
   - component: {fileID: 767102050}
   - component: {fileID: 767102049}
-  m_Layer: 8
+  m_Layer: 0
   m_Name: client_player
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1023,7 +1023,7 @@ GameObject:
   - component: {fileID: 2084854770}
   - component: {fileID: 2084854769}
   - component: {fileID: 2084854768}
-  m_Layer: 8
+  m_Layer: 0
   m_Name: server_player
   m_TagString: Untagged
   m_Icon: {fileID: 0}
