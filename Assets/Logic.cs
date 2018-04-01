@@ -126,10 +126,10 @@ public class Logic : MonoBehaviour
             ++client_tick_number;
         }
 
-        if (this.client_state_msgs.Count > 0 && Time.time >= this.client_state_msgs.Peek().delivery_time)
+        if (this.ClientHasStateMessage())
         {
             StateMessage state_msg = this.client_state_msgs.Dequeue();
-            while (this.client_state_msgs.Count > 0 && Time.time >= this.client_state_msgs.Peek().delivery_time) // todo(jbr) compression
+            while (this.ClientHasStateMessage())
             {
                 state_msg = this.client_state_msgs.Dequeue();
             }
@@ -245,5 +245,10 @@ public class Logic : MonoBehaviour
                 rigidbody.AddForce(this.local_player_camera_transform.up * this.player_movement_impulse, ForceMode.Impulse);
             }
         }
+    }
+
+    private bool ClientHasStateMessage()
+    {
+        return this.client_state_msgs.Count > 0 && Time.time >= this.client_state_msgs.Peek().delivery_time;
     }
 }
