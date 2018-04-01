@@ -136,6 +136,8 @@ public class Logic : MonoBehaviour
                 state_msg = this.client_state_msgs.Dequeue();
             }
 
+            this.client_last_received_state_tick = state_msg.tick_number;
+
             this.proxy_player.transform.position = state_msg.position;
             this.proxy_player.transform.rotation = state_msg.rotation;
 
