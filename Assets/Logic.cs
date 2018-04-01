@@ -93,23 +93,25 @@ public class Logic : MonoBehaviour
         {
             client_timer -= dt;
 
+            uint buffer_slot = client_tick_number % c_client_buffer_size;
+
+            // sample and store inputs for this tick
             Inputs inputs;
             inputs.up = Input.GetKey(KeyCode.W);
             inputs.down = Input.GetKey(KeyCode.S);
             inputs.left = Input.GetKey(KeyCode.A);
             inputs.right = Input.GetKey(KeyCode.D);
             inputs.jump = Input.GetKey(KeyCode.Space);
-
-            Rigidbody rigidbody = this.client_player.GetComponent<Rigidbody>();
-
-            uint buffer_slot = client_tick_number % c_client_buffer_size;
-            this.client_state_buffer[buffer_slot].position = rigidbody.position;
-            this.client_state_buffer[buffer_slot].rotation = rigidbody.rotation;
             this.client_input_buffer[buffer_slot] = inputs;
 
-            this.PrePhysicsStep(rigidbody, inputs);
-            Physics.Simulate(dt);
-
+            // store state for this tick, then use current state + input to step simulation
+            this.ClientStoreCurrentStateAndStep(
+                ref this.client_state_buffer[buffer_slot], 
+                this.client_player.GetComponent<Rigidbody>(), 
+                inputs, 
+                dt);
+            
+            // send input packet to server
             if (Random.value < Logic.c_packet_loss)
             {
                 InputMessage input_msg;
@@ -129,7 +131,7 @@ public class Logic : MonoBehaviour
         if (this.ClientHasStateMessage())
         {
             StateMessage state_msg = this.client_state_msgs.Dequeue();
-            while (this.ClientHasStateMessage())
+            while (this.ClientHasStateMessage()) // make sure if there are any newer state messages available, we use those instead
             {
                 state_msg = this.client_state_msgs.Dequeue();
             }
@@ -137,9 +139,12 @@ public class Logic : MonoBehaviour
             this.proxy_player.transform.position = state_msg.position;
             this.proxy_player.transform.rotation = state_msg.rotation;
 
+            // if there's enough error between client&server, then rewind&replay
             uint buffer_slot = state_msg.tick_number % c_client_buffer_size;
-            if ((state_msg.position - this.client_state_buffer[buffer_slot].position).sqrMagnitude > c_max_prediction_error_pos_sq ||
-                Quaternion.Dot(state_msg.rotation, this.client_state_buffer[buffer_slot].rotation) < c_max_prediction_error_rot_dot)
+            Vector3 position_error = state_msg.position - this.client_state_buffer[buffer_slot].position;
+            float rotation_error = Quaternion.Dot(state_msg.rotation, this.client_state_buffer[buffer_slot].rotation);
+            if (position_error.sqrMagnitude > c_max_prediction_error_pos_sq ||
+                rotation_error < c_max_prediction_error_rot_dot)
             {
                 Rigidbody rigidbody = this.client_player.GetComponent<Rigidbody>();
                 rigidbody.position = state_msg.position;
@@ -150,12 +155,8 @@ public class Logic : MonoBehaviour
                 uint rewind_tick_number = state_msg.tick_number;
                 while (rewind_tick_number < client_tick_number)
                 {
-                    buffer_slot = rewind_tick_number % c_client_buffer_size; // todo(jbr) compression
-                    this.client_state_buffer[buffer_slot].position = rigidbody.position;
-                    this.client_state_buffer[buffer_slot].rotation = rigidbody.rotation;
-
-                    this.PrePhysicsStep(rigidbody, this.client_input_buffer[buffer_slot]);
-                    Physics.Simulate(dt);
+                    buffer_slot = rewind_tick_number % c_client_buffer_size;
+                    this.ClientStoreCurrentStateAndStep(ref this.client_state_buffer[buffer_slot], rigidbody, this.client_input_buffer[buffer_slot], dt);
 
                     ++rewind_tick_number;
                 }
@@ -251,4 +252,13 @@ public class Logic : MonoBehaviour
     {
         return this.client_state_msgs.Count > 0 && Time.time >= this.client_state_msgs.Peek().delivery_time;
     }
+
+    private void ClientStoreCurrentStateAndStep(ref ClientState current_state, Rigidbody rigidbody, Inputs inputs, float dt)
+    {
+        current_state.position = rigidbody.position;
+        current_state.rotation = rigidbody.rotation;
+
+        this.PrePhysicsStep(rigidbody, inputs);
+        Physics.Simulate(dt);
+    }     
 }
