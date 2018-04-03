@@ -35,17 +35,21 @@ public class Logic : MonoBehaviour
         public Vector3 angular_velocity;
     }
 
+    // common stuff
     public Transform local_player_camera_transform;
     public float player_movement_impulse;
     public float player_jump_y_threshold;
     public GameObject client_player;
+    public GameObject smoothed_client_player;
     public GameObject server_player;
     public GameObject server_display_player;
     public GameObject proxy_player;
-    public bool enable_corrections = true;
     public float latency = 0.1f;
     public float packet_loss_chance = 0.05f;
 
+    // client specific
+    public bool client_enable_corrections = true;
+    public bool client_correction_smoothing = true;
     private float client_timer;
     private uint client_tick_number;
     private uint client_last_received_state_tick;
@@ -53,7 +57,9 @@ public class Logic : MonoBehaviour
     private ClientState[] client_state_buffer; // client stores predicted moves here
     private Inputs[] client_input_buffer; // client stores predicted inputs here
     private Queue<StateMessage> client_state_msgs;
+    private Vector3 client_pos_error;
 
+    // server specific
     public uint server_snapshot_rate;
     private uint server_tick_number;
     private uint server_tick_accumulator;
@@ -67,7 +73,9 @@ public class Logic : MonoBehaviour
         this.client_state_buffer = new ClientState[c_client_buffer_size];
         this.client_input_buffer = new Inputs[c_client_buffer_size];
         this.client_state_msgs = new Queue<StateMessage>();
+        this.client_pos_error = Vector3.zero;
 
+        this.server_tick_number = 0;
         this.server_tick_accumulator = 0;
         this.server_input_msgs = new Queue<InputMessage>();
     }
@@ -80,6 +88,7 @@ public class Logic : MonoBehaviour
         this.server_player.SetActive(false);
         this.client_player.SetActive(true);
 
+        Rigidbody client_rigidbody = this.client_player.GetComponent<Rigidbody>();
         float dt = Time.fixedDeltaTime;
         float client_timer = this.client_timer;
         uint client_tick_number = this.client_tick_number;
@@ -103,10 +112,10 @@ public class Logic : MonoBehaviour
             // store state for this tick, then use current state + input to step simulation
             this.ClientStoreCurrentStateAndStep(
                 ref this.client_state_buffer[buffer_slot], 
-                this.client_player.GetComponent<Rigidbody>(), 
+                client_rigidbody, 
                 inputs, 
                 dt);
-            
+
             // send input packet to server
             if (Random.value > this.packet_loss_chance)
             {
@@ -123,7 +132,7 @@ public class Logic : MonoBehaviour
 
             ++client_tick_number;
         }
-
+        
         if (this.ClientHasStateMessage())
         {
             StateMessage state_msg = this.client_state_msgs.Dequeue();
@@ -137,28 +146,56 @@ public class Logic : MonoBehaviour
             this.proxy_player.transform.position = state_msg.position;
             this.proxy_player.transform.rotation = state_msg.rotation;
 
-            if (this.enable_corrections)
+            if (this.client_enable_corrections)
             {
+                // capture the current predicted pos for smoothing
+                Vector3 prev_pos = client_rigidbody.position;
+
                 // rewind & replay
-                Rigidbody rigidbody = this.client_player.GetComponent<Rigidbody>();
-                rigidbody.position = state_msg.position;
-                rigidbody.rotation = state_msg.rotation;
-                rigidbody.velocity = state_msg.velocity;
-                rigidbody.angularVelocity = state_msg.angular_velocity;
+                client_rigidbody.position = state_msg.position;
+                client_rigidbody.rotation = state_msg.rotation;
+                client_rigidbody.velocity = state_msg.velocity;
+                client_rigidbody.angularVelocity = state_msg.angular_velocity;
 
                 uint rewind_tick_number = state_msg.tick_number;
                 while (rewind_tick_number < client_tick_number)
                 {
                     uint buffer_slot = rewind_tick_number % c_client_buffer_size;
-                    this.ClientStoreCurrentStateAndStep(ref this.client_state_buffer[buffer_slot], rigidbody, this.client_input_buffer[buffer_slot], dt);
+                    this.ClientStoreCurrentStateAndStep(
+                        ref this.client_state_buffer[buffer_slot], 
+                        client_rigidbody, 
+                        this.client_input_buffer[buffer_slot], 
+                        dt);
 
                     ++rewind_tick_number;
+                }
+
+                // if more than 2ms apart, just snap
+                if ((prev_pos - client_rigidbody.position).sqrMagnitude >= 4.0f)
+                {
+                    this.client_pos_error = Vector3.zero;
+                }
+                else
+                {
+                    this.client_pos_error += prev_pos - client_rigidbody.position;
                 }
             }
         }
 
         this.client_timer = client_timer;
         this.client_tick_number = client_tick_number;
+
+        if (this.client_correction_smoothing)
+        {
+            this.client_pos_error *= 0.9f;
+        }
+        else
+        {
+            this.client_pos_error = Vector3.zero;
+        }
+        
+        this.smoothed_client_player.transform.position = client_rigidbody.position + this.client_pos_error;
+        this.smoothed_client_player.transform.rotation = client_rigidbody.rotation;
 
         // server update
 
@@ -169,6 +206,7 @@ public class Logic : MonoBehaviour
         uint server_tick_number = this.server_tick_number;
         uint server_tick_accumulator = this.server_tick_accumulator;
         Rigidbody server_rigidbody = this.server_player.GetComponent<Rigidbody>();
+        
         while (this.server_input_msgs.Count > 0 && Time.time >= this.server_input_msgs.Peek().delivery_time)
         {
             InputMessage input_msg = this.server_input_msgs.Dequeue();
@@ -218,7 +256,7 @@ public class Logic : MonoBehaviour
         
         this.server_tick_number = server_tick_number;
         this.server_tick_accumulator = server_tick_accumulator;
-
+        
         // finally, we're viewing the client, so enable the client player, disable server again
         this.server_player.SetActive(false);
         this.client_player.SetActive(true);

@@ -10,6 +10,7 @@ public class Gui : MonoBehaviour
     public GameObject proxy_player;
 
     public Toggle corrections_toggle;
+    public Toggle correction_smoothing_toggle;
     public Toggle server_player_toggle;
     public Toggle proxy_player_toggle;
     public Slider packet_loss_slider;
@@ -22,6 +23,7 @@ public class Gui : MonoBehaviour
     public void Start()
     {
         this.corrections_toggle.isOn = true;
+        this.correction_smoothing_toggle.isOn = true;
         this.server_player_toggle.isOn = false;
         this.proxy_player_toggle.isOn = false;
         this.packet_loss_slider.value = this.logic.packet_loss_chance;
@@ -41,12 +43,18 @@ public class Gui : MonoBehaviour
 
     public void OnToggleCorrections(bool enabled)
     {
-        this.logic.enable_corrections = enabled;
+        this.logic.client_enable_corrections = enabled;
+        this.correction_smoothing_toggle.interactable = enabled;
+    }
+
+    public void onToggleCorrectionSmoothing(bool enabled)
+    {
+        this.logic.client_correction_smoothing = enabled;
     }
 
     public void OnPacketLossSliderChanged(float value)
     {
-        this.packet_loss_label.text = string.Format("Packet Loss - {0:F1}%", value);
+        this.packet_loss_label.text = string.Format("Packet Loss - {0:F1}%", value*100.0f);
         this.logic.packet_loss_chance = value;
     }
 
