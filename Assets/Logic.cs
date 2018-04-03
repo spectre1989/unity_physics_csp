@@ -46,10 +46,6 @@ public class Logic : MonoBehaviour
     public float latency = 0.1f;
     public float packet_loss_chance = 0.05f;
 
-    private const float c_max_prediction_error_pos = 0.1f;
-    private const float c_max_prediction_error_pos_sq = c_max_prediction_error_pos * c_max_prediction_error_pos;
-    private const float c_max_prediction_error_rot_dot = 0;//0.996f; // ~5 degrees todo(jbr)
-
     private float client_timer;
     private uint client_tick_number;
     private uint client_last_received_state_tick;
@@ -143,27 +139,20 @@ public class Logic : MonoBehaviour
 
             if (this.enable_corrections)
             {
-                // if there's enough error between client&server, then rewind&replay
-                uint buffer_slot = state_msg.tick_number % c_client_buffer_size;
-                Vector3 position_error = state_msg.position - this.client_state_buffer[buffer_slot].position;
-                float rotation_error = Quaternion.Dot(state_msg.rotation, this.client_state_buffer[buffer_slot].rotation);
-                if (position_error.sqrMagnitude > c_max_prediction_error_pos_sq ||
-                    rotation_error < c_max_prediction_error_rot_dot)
+                // rewind & replay
+                Rigidbody rigidbody = this.client_player.GetComponent<Rigidbody>();
+                rigidbody.position = state_msg.position;
+                rigidbody.rotation = state_msg.rotation;
+                rigidbody.velocity = state_msg.velocity;
+                rigidbody.angularVelocity = state_msg.angular_velocity;
+
+                uint rewind_tick_number = state_msg.tick_number;
+                while (rewind_tick_number < client_tick_number)
                 {
-                    Rigidbody rigidbody = this.client_player.GetComponent<Rigidbody>();
-                    rigidbody.position = state_msg.position;
-                    rigidbody.rotation = state_msg.rotation;
-                    rigidbody.velocity = state_msg.velocity;
-                    rigidbody.angularVelocity = state_msg.angular_velocity;
+                    uint buffer_slot = rewind_tick_number % c_client_buffer_size;
+                    this.ClientStoreCurrentStateAndStep(ref this.client_state_buffer[buffer_slot], rigidbody, this.client_input_buffer[buffer_slot], dt);
 
-                    uint rewind_tick_number = state_msg.tick_number;
-                    while (rewind_tick_number < client_tick_number)
-                    {
-                        buffer_slot = rewind_tick_number % c_client_buffer_size;
-                        this.ClientStoreCurrentStateAndStep(ref this.client_state_buffer[buffer_slot], rigidbody, this.client_input_buffer[buffer_slot], dt);
-
-                        ++rewind_tick_number;
-                    }
+                    ++rewind_tick_number;
                 }
             }
         }
