@@ -149,7 +149,7 @@ public class Logic : MonoBehaviour
             if (this.client_enable_corrections)
             {
                 // capture the current predicted pos for smoothing
-                Vector3 prev_pos = client_rigidbody.position;
+                Vector3 prev_pos = client_rigidbody.position + this.client_pos_error;
 
                 // rewind & replay
                 client_rigidbody.position = state_msg.position;
@@ -177,7 +177,7 @@ public class Logic : MonoBehaviour
                 }
                 else
                 {
-                    this.client_pos_error += prev_pos - client_rigidbody.position;
+                    this.client_pos_error = prev_pos - client_rigidbody.position;
                 }
             }
         }
