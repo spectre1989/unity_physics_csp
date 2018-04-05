@@ -148,36 +148,43 @@ public class Logic : MonoBehaviour
 
             if (this.client_enable_corrections)
             {
-                // capture the current predicted pos for smoothing
-                Vector3 prev_pos = client_rigidbody.position + this.client_pos_error;
+                uint buffer_slot = state_msg.tick_number % c_client_buffer_size;
+                Vector3 position_error = state_msg.position - this.client_state_buffer[buffer_slot].position;
+                float rotation_error = Quaternion.Dot(state_msg.rotation, this.client_state_buffer[buffer_slot].rotation);
 
-                // rewind & replay
-                client_rigidbody.position = state_msg.position;
-                client_rigidbody.rotation = state_msg.rotation;
-                client_rigidbody.velocity = state_msg.velocity;
-                client_rigidbody.angularVelocity = state_msg.angular_velocity;
-
-                uint rewind_tick_number = state_msg.tick_number;
-                while (rewind_tick_number < client_tick_number)
+                if (position_error.sqrMagnitude > 0.0000001f || rotation_error < 0.9999f)
                 {
-                    uint buffer_slot = rewind_tick_number % c_client_buffer_size;
-                    this.ClientStoreCurrentStateAndStep(
-                        ref this.client_state_buffer[buffer_slot], 
-                        client_rigidbody, 
-                        this.client_input_buffer[buffer_slot], 
-                        dt);
+                    // capture the current predicted pos for smoothing
+                    Vector3 prev_pos = client_rigidbody.position + this.client_pos_error;
 
-                    ++rewind_tick_number;
-                }
+                    // rewind & replay
+                    client_rigidbody.position = state_msg.position;
+                    client_rigidbody.rotation = state_msg.rotation;
+                    client_rigidbody.velocity = state_msg.velocity;
+                    client_rigidbody.angularVelocity = state_msg.angular_velocity;
 
-                // if more than 2ms apart, just snap
-                if ((prev_pos - client_rigidbody.position).sqrMagnitude >= 4.0f)
-                {
-                    this.client_pos_error = Vector3.zero;
-                }
-                else
-                {
-                    this.client_pos_error = prev_pos - client_rigidbody.position;
+                    uint rewind_tick_number = state_msg.tick_number;
+                    while (rewind_tick_number < client_tick_number)
+                    {
+                        buffer_slot = rewind_tick_number % c_client_buffer_size;
+                        this.ClientStoreCurrentStateAndStep(
+                            ref this.client_state_buffer[buffer_slot],
+                            client_rigidbody,
+                            this.client_input_buffer[buffer_slot],
+                            dt);
+
+                        ++rewind_tick_number;
+                    }
+
+                    // if more than 2ms apart, just snap
+                    if ((prev_pos - client_rigidbody.position).sqrMagnitude >= 4.0f)
+                    {
+                        this.client_pos_error = Vector3.zero;
+                    }
+                    else
+                    {
+                        this.client_pos_error = prev_pos - client_rigidbody.position;
+                    }
                 }
             }
         }
