@@ -50,6 +50,7 @@ public class Logic : MonoBehaviour
     // client specific
     public bool client_enable_corrections = true;
     public bool client_correction_smoothing = true;
+    public bool client_send_redundant_inputs = true;
     private float client_timer;
     private uint client_tick_number;
     private uint client_last_received_state_tick;
@@ -121,9 +122,10 @@ public class Logic : MonoBehaviour
             {
                 InputMessage input_msg;
                 input_msg.delivery_time = Time.time + this.latency;
-                input_msg.start_tick_number = this.client_last_received_state_tick;
+                input_msg.start_tick_number = this.client_send_redundant_inputs ? this.client_last_received_state_tick : client_tick_number;
                 input_msg.inputs = new List<Inputs>();
-                for (uint tick = this.client_last_received_state_tick; tick <= client_tick_number; ++tick)
+
+                for (uint tick = input_msg.start_tick_number; tick <= client_tick_number; ++tick)
                 {
                     input_msg.inputs.Add(this.client_input_buffer[tick % c_client_buffer_size]);
                 }

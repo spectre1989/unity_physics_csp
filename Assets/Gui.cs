@@ -11,6 +11,7 @@ public class Gui : MonoBehaviour
 
     public Toggle corrections_toggle;
     public Toggle correction_smoothing_toggle;
+    public Toggle redundant_inputs_toggle;
     public Toggle server_player_toggle;
     public Toggle proxy_player_toggle;
     public Slider packet_loss_slider;
@@ -24,6 +25,7 @@ public class Gui : MonoBehaviour
     {
         this.corrections_toggle.isOn = true;
         this.correction_smoothing_toggle.isOn = true;
+        this.redundant_inputs_toggle.isOn = true;
         this.server_player_toggle.isOn = false;
         this.proxy_player_toggle.isOn = false;
         this.packet_loss_slider.value = this.logic.packet_loss_chance;
@@ -47,9 +49,14 @@ public class Gui : MonoBehaviour
         this.correction_smoothing_toggle.interactable = enabled;
     }
 
-    public void onToggleCorrectionSmoothing(bool enabled)
+    public void OnToggleCorrectionSmoothing(bool enabled)
     {
         this.logic.client_correction_smoothing = enabled;
+    }
+
+    public void OnToggleSendRedundantInputs(bool enable)
+    {
+        this.logic.client_send_redundant_inputs = enable;
     }
 
     public void OnPacketLossSliderChanged(float value)
