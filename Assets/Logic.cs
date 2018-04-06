@@ -227,10 +227,10 @@ public class Logic : MonoBehaviour
             {
                 // there may be some inputs in the array that we've already had,
                 // so figure out where to start
-                int start_i = (int)(server_tick_number - input_msg.start_tick_number);
+                uint start_i = server_tick_number > input_msg.start_tick_number ? (server_tick_number - input_msg.start_tick_number) : 0;
 
                 // run through all relevant inputs, and step player forward
-                for (int i = start_i; i < input_msg.inputs.Count; ++i)
+                for (int i = (int)start_i; i < input_msg.inputs.Count; ++i)
                 {
                     this.PrePhysicsStep(server_rigidbody, input_msg.inputs[i]);
                     Physics.Simulate(dt);
