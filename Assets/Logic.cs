@@ -152,9 +152,8 @@ public class Logic : MonoBehaviour
             {
                 uint buffer_slot = state_msg.tick_number % c_client_buffer_size;
                 Vector3 position_error = state_msg.position - this.client_state_buffer[buffer_slot].position;
-                float rotation_error = Quaternion.Dot(state_msg.rotation, this.client_state_buffer[buffer_slot].rotation);
 
-                if (position_error.sqrMagnitude > 0.0000001f || rotation_error < 0.9999f)
+                if (position_error.sqrMagnitude > 0.0000001f)
                 {
                     // capture the current predicted pos for smoothing
                     Vector3 prev_pos = client_rigidbody.position + this.client_pos_error;
