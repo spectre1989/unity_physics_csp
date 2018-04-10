@@ -6,6 +6,7 @@ using UnityEngine.UI;
 public class Gui : MonoBehaviour
 {
     public Logic logic;
+    public GameObject gui;
     public GameObject server_display_player;
     public GameObject proxy_player;
 
@@ -31,6 +32,14 @@ public class Gui : MonoBehaviour
         this.packet_loss_slider.value = this.logic.packet_loss_chance;
         this.latency_slider.value = this.logic.latency;
         this.snapshot_rate_slider.value = Mathf.Log(this.logic.server_snapshot_rate, 2.0f);
+    }
+
+    private void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.F12))
+        {
+            this.gui.SetActive(!this.gui.activeSelf);
+        }
     }
 
     public void OnToggleServerPlayer(bool enabled)

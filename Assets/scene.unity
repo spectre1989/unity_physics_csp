@@ -1179,6 +1179,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   logic: {fileID: 2053205579}
+  gui: {fileID: 781794754}
   server_display_player: {fileID: 579593188}
   proxy_player: {fileID: 892738513}
   corrections_toggle: {fileID: 854616421}
