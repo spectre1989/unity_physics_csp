@@ -59,6 +59,7 @@ public class Logic : MonoBehaviour
     private Inputs[] client_input_buffer; // client stores predicted inputs here
     private Queue<StateMessage> client_state_msgs;
     private Vector3 client_pos_error;
+    private Quaternion client_rot_error;
 
     // server specific
     public uint server_snapshot_rate;
@@ -75,6 +76,7 @@ public class Logic : MonoBehaviour
         this.client_input_buffer = new Inputs[c_client_buffer_size];
         this.client_state_msgs = new Queue<StateMessage>();
         this.client_pos_error = Vector3.zero;
+        this.client_rot_error = Quaternion.identity;
 
         this.server_tick_number = 0;
         this.server_tick_accumulator = 0;
@@ -152,11 +154,14 @@ public class Logic : MonoBehaviour
             {
                 uint buffer_slot = state_msg.tick_number % c_client_buffer_size;
                 Vector3 position_error = state_msg.position - this.client_state_buffer[buffer_slot].position;
+                float rotation_error = 1.0f - Quaternion.Dot(state_msg.rotation, this.client_state_buffer[buffer_slot].rotation);
 
-                if (position_error.sqrMagnitude > 0.0000001f)
+                if (position_error.sqrMagnitude > 0.0000001f ||
+                    rotation_error > 0.00001f)
                 {
                     // capture the current predicted pos for smoothing
                     Vector3 prev_pos = client_rigidbody.position + this.client_pos_error;
+                    Quaternion prev_rot = client_rigidbody.rotation * this.client_rot_error;
 
                     // rewind & replay
                     client_rigidbody.position = state_msg.position;
@@ -181,10 +186,12 @@ public class Logic : MonoBehaviour
                     if ((prev_pos - client_rigidbody.position).sqrMagnitude >= 4.0f)
                     {
                         this.client_pos_error = Vector3.zero;
+                        this.client_rot_error = Quaternion.identity;
                     }
                     else
                     {
                         this.client_pos_error = prev_pos - client_rigidbody.position;
+                        this.client_rot_error = Quaternion.Inverse(client_rigidbody.rotation) * prev_rot;
                     }
                 }
             }
@@ -196,14 +203,16 @@ public class Logic : MonoBehaviour
         if (this.client_correction_smoothing)
         {
             this.client_pos_error *= 0.9f;
+            this.client_rot_error = Quaternion.Slerp(this.client_rot_error, Quaternion.identity, 0.1f);
         }
         else
         {
             this.client_pos_error = Vector3.zero;
+            this.client_rot_error = Quaternion.identity;
         }
         
         this.smoothed_client_player.transform.position = client_rigidbody.position + this.client_pos_error;
-        this.smoothed_client_player.transform.rotation = client_rigidbody.rotation;
+        this.smoothed_client_player.transform.rotation = client_rigidbody.rotation * this.client_rot_error;
 
         // server update
 
