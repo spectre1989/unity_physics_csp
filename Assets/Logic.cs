@@ -245,6 +245,7 @@ public class Logic : MonoBehaviour
                     this.PrePhysicsStep(server_rigidbody, input_msg.inputs[i]);
                     Physics.Simulate(dt);
 
+                    ++server_tick_number;
                     ++server_tick_accumulator;
                     if (server_tick_accumulator >= this.server_snapshot_rate)
                     {
@@ -266,8 +267,6 @@ public class Logic : MonoBehaviour
                 
                 this.server_display_player.transform.position = server_rigidbody.position;
                 this.server_display_player.transform.rotation = server_rigidbody.rotation;
-
-                server_tick_number = max_tick + 1;
             }
         }
         
