@@ -8,3 +8,7 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/scene.unity
     guid: e83ac83b46ce65843865f91a40fb227d
+  - enabled: 1
+    path: Assets/physics_scene.unity
+    guid: 2c2e95772b6d1aa4a948c2b800249e22
+  m_configObjects: {}

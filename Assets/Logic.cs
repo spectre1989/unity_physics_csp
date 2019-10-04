@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
+using UnityEngine.SceneManagement;
 
 public class Logic : MonoBehaviour
 {
@@ -67,6 +68,9 @@ public class Logic : MonoBehaviour
     private uint server_tick_accumulator;
     private Queue<InputMessage> server_input_msgs;
 
+    private Scene server_scene, client_scene;
+    private PhysicsScene server_physics_scene, client_physics_scene;
+
     private void Start()
     {
         this.client_timer = 0.0f;
@@ -81,16 +85,20 @@ public class Logic : MonoBehaviour
         this.server_tick_number = 0;
         this.server_tick_accumulator = 0;
         this.server_input_msgs = new Queue<InputMessage>();
+
+        server_scene = SceneManager.LoadScene("physics_scene", new LoadSceneParameters() { loadSceneMode = LoadSceneMode.Additive, localPhysicsMode = LocalPhysicsMode.Physics3D });
+        client_scene = SceneManager.LoadScene("physics_scene", new LoadSceneParameters() { loadSceneMode = LoadSceneMode.Additive, localPhysicsMode = LocalPhysicsMode.Physics3D });
+
+        server_physics_scene = server_scene.GetPhysicsScene();
+        client_physics_scene = client_scene.GetPhysicsScene();
+
+        SceneManager.MoveGameObjectToScene(client_player, client_scene);
+        SceneManager.MoveGameObjectToScene(server_player, server_scene);
     }
 
     private void Update()
     {
         // client update
-
-        // enable client player, disable server player
-        this.server_player.SetActive(false);
-        this.client_player.SetActive(true);
-
         Rigidbody client_rigidbody = this.client_player.GetComponent<Rigidbody>();
         float dt = Time.fixedDeltaTime;
         float client_timer = this.client_timer;
@@ -159,6 +167,7 @@ public class Logic : MonoBehaviour
                 if (position_error.sqrMagnitude > 0.0000001f ||
                     rotation_error > 0.00001f)
                 {
+                    Debug.Log("Correcting for error at tick " + state_msg.tick_number + " (rewinding " + (client_tick_number - state_msg.tick_number) + " ticks)");
                     // capture the current predicted pos for smoothing
                     Vector3 prev_pos = client_rigidbody.position + this.client_pos_error;
                     Quaternion prev_rot = client_rigidbody.rotation * this.client_rot_error;
@@ -214,11 +223,7 @@ public class Logic : MonoBehaviour
         this.smoothed_client_player.transform.position = client_rigidbody.position + this.client_pos_error;
         this.smoothed_client_player.transform.rotation = client_rigidbody.rotation * this.client_rot_error;
 
-        // server update
-
-        // enable server player, disable client player
-        this.client_player.SetActive(false);
-        this.server_player.SetActive(true);
+        // server update   
 
         uint server_tick_number = this.server_tick_number;
         uint server_tick_accumulator = this.server_tick_accumulator;
@@ -243,7 +248,7 @@ public class Logic : MonoBehaviour
                 for (int i = (int)start_i; i < input_msg.inputs.Count; ++i)
                 {
                     this.PrePhysicsStep(server_rigidbody, input_msg.inputs[i]);
-                    Physics.Simulate(dt);
+                    server_physics_scene.Simulate(dt);
 
                     ++server_tick_number;
                     ++server_tick_accumulator;
@@ -272,10 +277,6 @@ public class Logic : MonoBehaviour
         
         this.server_tick_number = server_tick_number;
         this.server_tick_accumulator = server_tick_accumulator;
-        
-        // finally, we're viewing the client, so enable the client player, disable server again
-        this.server_player.SetActive(false);
-        this.client_player.SetActive(true);
     }
 
     private void PrePhysicsStep(Rigidbody rigidbody, Inputs inputs)
@@ -316,6 +317,6 @@ public class Logic : MonoBehaviour
         current_state.rotation = rigidbody.rotation;
 
         this.PrePhysicsStep(rigidbody, inputs);
-        Physics.Simulate(dt);
+        client_physics_scene.Simulate(dt);
     }     
 }
