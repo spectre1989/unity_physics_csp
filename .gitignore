@@ -5,3 +5,4 @@ unity_physics_csp.sln
 Assembly-CSharp.csproj
 obj/
 Temp/
+Logs/
